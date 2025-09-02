@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -38,6 +38,7 @@ class MemesGameBot:
         self.db = Database()
         self.file_manager = FileManager()
         self.active_games = {}
+        self.game_messages = {}  # Для хранения ID сообщений игр
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
@@ -79,32 +80,39 @@ class MemesGameBot:
         self.active_games[chat_id] = {
             'players': [user_id],
             'status': 'waiting',
-            'leader': user_id
+            'leader': user_id,
+            'message_id': query.message.message_id
         }
+        
+        reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("▶️ Начать игру", callback_data=f"begin_{chat_id}")],
+            [InlineKeyboardButton("📋 Правила", callback_data="show_rules")]
+        ])
         
         await query.edit_message_text(
             "🎮 Игра создана!\n"
             f"Игроков: 1/{Config.MAX_PLAYERS}\n\n"
             "Отправьте друзьям команду чтобы присоединиться:\n"
             f"/join {chat_id}",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("▶️ Начать игру", callback_data=f"begin_{chat_id}")]
-            ])
+            reply_markup=reply_markup
         )
     
     async def join_game(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
+            print(f"🔄 Команда join получена: args={context.args}")
+            
             if not context.args:
-                await update.message.reply_text("❌ Используйте: /join_123456789")
+                await update.message.reply_text("❌ Используйте: /join 123456789")
                 return
                 
             chat_id = int(context.args[0])
             user = update.effective_user
             
             print(f"🔄 Игрок {user.first_name} пытается присоединиться к игре {chat_id}")
+            print(f"🔄 Активные игры: {list(self.active_games.keys())}")
             
             if chat_id not in self.active_games:
-                await update.message.reply_text("❌ Игра не найдена или уже завершена!")
+                await update.message.reply_text("❌ Игра не найдена! Создайте новую игру через /start")
                 return
             
             game = self.active_games[chat_id]
@@ -122,14 +130,39 @@ class MemesGameBot:
             self.db.add_user(user.id, user.username, user.first_name, user.last_name)
             
             print(f"✅ Игрок {user.first_name} добавлен в игру {chat_id}")
+            print(f"✅ Теперь игроков: {len(game['players'])}")
             
+            # Отправляем сообщение игроку
             await update.message.reply_text(
-                f"✅ {user.first_name} присоединился к игре!\n"
+                f"✅ Вы присоединились к игре!\n"
                 f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
             )
             
-        except (ValueError):
-            await update.message.reply_text("❌ Используйте: /join_123456789")
+            # Отправляем сообщение в основной чат игры
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ {user.first_name} присоединился к игре!\n"
+                     f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
+            )
+            
+            # Обновляем сообщение с игрой
+            reply_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton("▶️ Начать игру", callback_data=f"begin_{chat_id}")],
+                [InlineKeyboardButton("📋 Правила", callback_data="show_rules")]
+            ])
+            
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=game['message_id'],
+                    text=f"🎮 Игра создана!\nИгроков: {len(game['players'])}/{Config.MAX_PLAYERS}\n\nОтправьте друзьям команду чтобы присоединиться:\n/join {chat_id}",
+                    reply_markup=reply_markup
+                )
+            except Exception as e:
+                print(f"⚠️ Не удалось обновить сообщение: {e}")
+            
+        except ValueError:
+            await update.message.reply_text("❌ Используйте: /join 123456789")
         except Exception as e:
             print(f"❌ Ошибка присоединения: {e}")
             await update.message.reply_text("❌ Ошибка присоединения к игре")
@@ -138,7 +171,11 @@ class MemesGameBot:
         chat_id = int(query.data.split('_')[1])
         game = self.active_games.get(chat_id)
         
-        if not game or len(game['players']) < Config.MIN_PLAYERS:
+        if not game:
+            await query.answer("❌ Игра не найдена!")
+            return
+            
+        if len(game['players']) < Config.MIN_PLAYERS:
             await query.answer("❌ Нужно минимум 2 игрока!")
             return
         
@@ -180,7 +217,6 @@ class MemesGameBot:
             reply_markup=None
         )
         
-        # TODO: Раздать мемы игрокам и обработать выбор
         print(f"✅ Выбрана ситуация: {chosen_situation}")
     
     async def show_rules(self, query):
