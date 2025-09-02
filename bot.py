@@ -210,35 +210,24 @@ class MemesGameBot:
             situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
             game['situations'] = situations
             
-            # Создаем клавиатуру с ситуациями (безопасно для кодировки)
+            # Создаем клавиатуру с ситуациями (с безопасной обработкой)
             keyboard = []
             for i, situation in enumerate(situations):
-                # Безопасная обработка текста
-                try:
-                    button_text = situation[:40] + "..." if len(situation) > 40 else situation
-                    # Проверяем кодировку
-                    button_text.encode('utf-8')
-                except UnicodeEncodeError:
-                    button_text = f"Ситуация {i+1}"
-                    
+                safe_situation = self._safe_text(situation, f"Ситуация {i+1}")
+                button_text = safe_situation[:40] + "..." if len(safe_situation) > 40 else safe_situation
                 keyboard.append([InlineKeyboardButton(
                     button_text,
                     callback_data=f"situation_{i}"
                 )])
             
             # Безопасное получение имени ведущего
-            leader_name = game['player_names'][game['leader']]
-            try:
-                leader_name.encode('utf-8')
-            except UnicodeEncodeError:
-                leader_name = "Ведущий"
+            leader_name = self._safe_text(game['player_names'][game['leader']], "Ведущий")
             
             # Безопасное сообщение
-            try:
-                message_text = f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:"
-                message_text.encode('utf-8')
-            except UnicodeEncodeError:
-                message_text = f"📝 Ведущий, выберите ситуацию для раунда {game['round_number']}:"
+            message_text = self._safe_text(
+                f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:",
+                f"📝 Ведущий, выберите ситуацию для раунда {game['round_number']}:"
+            )
             
             # Отправляем новое сообщение вместо редактирования
             await query.message.reply_text(
