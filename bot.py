@@ -133,130 +133,151 @@ class MemesGameBot:
             await query.answer("❌ Ошибка создания игры!")
     
     async def join_game(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        try:
-            if not context.args:
-                await update.message.reply_text("❌ Используйте: /join_123456789")
-                return
-                
-            chat_id = int(context.args[0])
-            user = update.effective_user
-            
-            print(f"🔄 Игрок {user.first_name} пытается присоединиться к игре {chat_id}")
-            
-            if chat_id not in self.active_games:
-                await update.message.reply_text("❌ Игра не найдена или уже завершена!")
-                return
-            
-            game = self.active_games[chat_id]
-            
-            if user.id in game['players']:
-                await update.message.reply_text("✅ Вы уже в игре!")
-                return
-            
-            if len(game['players']) >= Config.MAX_PLAYERS:
-                await update.message.reply_text("❌ Максимум 8 игроков достигнут!")
-                return
-            
-            # Добавляем игрока
-            game['players'].append(user.id)
-            game['player_names'][user.id] = user.first_name
-            game['scores'][user.id] = 0
-            self.db.add_user(user.id, user.username, user.first_name, user.last_name)
-            
-            print(f"✅ Игрок {user.first_name} добавлен в игру {chat_id}")
-            
-            # Отправляем уведомление в чат о новом игроке
-            await context.bot.send_message(
-                chat_id,
-                f"✅ {user.first_name} присоединился к игре!\n"
-                f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
-            )
-            
-            await update.message.reply_text(
-                f"✅ Вы присоединились к игре!\n"
-                f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
-            )
-            
-        except ValueError:
+    try:
+        if not context.args:
             await update.message.reply_text("❌ Используйте: /join_123456789")
-        except Exception as e:
-            print(f"❌ Ошибка присоединения: {e}")
-            await update.message.reply_text("❌ Ошибка присоединения к игре")
+            return
+            
+        chat_id = int(context.args[0])
+        user = update.effective_user
+        
+        print(f"🔄 Игрок {user.first_name} пытается присоединиться к игре {chat_id}")
+        
+        if chat_id not in self.active_games:
+            await update.message.reply_text("❌ Игра не найдена или уже завершена!")
+            return
+        
+        game = self.active_games[chat_id]
+        
+        if user.id in game['players']:
+            await update.message.reply_text("✅ Вы уже в игре!")
+            return
+        
+        if len(game['players']) >= Config.MAX_PLAYERS:
+            await update.message.reply_text("❌ Максимум 8 игроков достигнут!")
+            return
+        
+        # Безопасное имя игрока
+        safe_player_name = user.first_name.encode('ascii', errors='ignore').decode('ascii')
+        if not safe_player_name:
+            safe_player_name = f"Игрок{len(game['players']) + 1}"
+        
+        # Добавляем игрока
+        game['players'].append(user.id)
+        game['player_names'][user.id] = safe_player_name
+        game['scores'][user.id] = 0
+        self.db.add_user(user.id, user.username, user.first_name, user.last_name)
+        
+        print(f"✅ Игрок {safe_player_name} добавлен в игру {chat_id}")
+        
+        # Отправляем уведомление в чат о новом игроке
+        await context.bot.send_message(
+            chat_id,
+            f"✅ {safe_player_name} присоединился к игре!\n"
+            f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
+        )
+        
+        await update.message.reply_text(
+            f"✅ Вы присоединились к игре!\n"
+            f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
+        )
+        
+    except ValueError:
+        await update.message.reply_text("❌ Используйте: /join_123456789")
+    except Exception as e:
+        print(f"❌ Ошибка присоединения: {e}")
+        await update.message.reply_text("❌ Ошибка присоединения к игре")
     
     async def begin_game(self, query):
-        try:
-            chat_id = int(query.data.split('_')[1])
-            game = self.active_games.get(chat_id)
-            
-            if not game:
-                await query.answer("❌ Игра не найдена!")
-                return
-            
-            if len(game['players']) < Config.MIN_PLAYERS:
-                await query.answer(f"❌ Нужно минимум {Config.MIN_PLAYERS} игрока!")
-                return
-            
-            game['round_number'] = 1
-            game['status'] = 'choosing_situation'
-            
-            # Получаем случайные ситуации
-            situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
-            game['situations'] = situations
-            
-            # Создаем клавиатуру с ситуациями
-            keyboard = []
-            for i, situation in enumerate(situations):
-                keyboard.append([InlineKeyboardButton(
-                    situation[:40] + "..." if len(situation) > 40 else situation,
-                    callback_data=f"situation_{i}"
-                )])
-            
-            leader_name = game['player_names'][game['leader']]
-            
-            # Отправляем новое сообщение вместо редактирования
-            await query.message.reply_text(
-                f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-            
-            await query.answer("🎮 Игра началась!")
-            
-        except Exception as e:
-            print(f"❌ Ошибка в begin_game: {e}")
-            await query.answer("❌ Ошибка начала игры!")
+    try:
+        chat_id = int(query.data.split('_')[1])
+        game = self.active_games.get(chat_id)
+        
+        if not game:
+            await query.answer("❌ Игра не найдена!")
+            return
+        
+        if len(game['players']) < Config.MIN_PLAYERS:
+            await query.answer(f"❌ Нужно минимум {Config.MIN_PLAYERS} игрока!")
+            return
+        
+        game['round_number'] = 1
+        game['status'] = 'choosing_situation'
+        
+        # Получаем случайные ситуации
+        situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
+        game['situations'] = situations
+        
+        # Создаем клавиатуру с ситуациями
+        keyboard = []
+        for i, situation in enumerate(situations):
+            # Безопасное форматирование текста для кнопок
+            button_text = situation[:40] + "..." if len(situation) > 40 else situation
+            # Убедимся, что текст в ASCII
+            safe_text = button_text.encode('ascii', errors='ignore').decode('ascii')
+            if not safe_text:  # Если весь текст был не-ASCII
+                safe_text = f"Ситуация {i+1}"
+                
+            keyboard.append([InlineKeyboardButton(
+                safe_text,
+                callback_data=f"situation_{i}"
+            )])
+        
+        # Безопасное получение имени ведущего
+        leader_name = game['player_names'][game['leader']]
+        safe_leader_name = leader_name.encode('ascii', errors='ignore').decode('ascii')
+        if not safe_leader_name:
+            safe_leader_name = "Ведущий"
+        
+        # Отправляем новое сообщение вместо редактирования
+        await query.message.reply_text(
+            f"📝 {safe_leader_name}, выберите ситуацию для раунда {game['round_number']}:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        await query.answer("🎮 Игра началась!")
+        
+    except Exception as e:
+        print(f"❌ Ошибка в begin_game: {e}")
+        await query.answer("❌ Ошибка начала игры!")
     
     async def choose_situation(self, query):
-        try:
-            chat_id = query.message.chat_id
-            game = self.active_games.get(chat_id)
-            
-            if not game or query.from_user.id != game['leader']:
-                await query.answer("❌ Только ведущий может выбирать!")
-                return
-            
-            situation_index = int(query.data.split('_')[1])
-            chosen_situation = game['situations'][situation_index]
-            game['current_situation'] = chosen_situation
-            game['status'] = 'players_choosing'
-            game['submitted_memes'] = {}  # user_id -> meme_data
-            
-            # Отправляем ситуацию всем в чате
-            await query.edit_message_text(
-                f"🎲 РАУНД {game['round_number']} - СИТУАЦИЯ:\n\n{chosen_situation}\n\n"
-                "Игроки выбирают мемы...",
-                reply_markup=None
-            )
-            
-            # Раздаем мемы каждому игроку в ЛС
-            for player_id in game['players']:
-                if player_id != game['leader']:  # Ведущий не выбирает мем
-                    await self.distribute_memes_to_player(chat_id, player_id, query.message.bot)
-            
-            print(f"✅ Выбрана ситуация: {chosen_situation}")
-            
-        except Exception as e:
-            print(f"❌ Ошибка в choose_situation: {e}")
-            await query.answer("❌ Ошибка выбора ситуации!")
+    try:
+        chat_id = query.message.chat_id
+        game = self.active_games.get(chat_id)
+        
+        if not game or query.from_user.id != game['leader']:
+            await query.answer("❌ Только ведущий может выбирать!")
+            return
+        
+        situation_index = int(query.data.split('_')[1])
+        chosen_situation = game['situations'][situation_index]
+        game['current_situation'] = chosen_situation
+        game['status'] = 'players_choosing'
+        game['submitted_memes'] = {}  # user_id -> meme_data
+        
+        # Безопасное отображение ситуации
+        safe_situation = chosen_situation.encode('ascii', errors='ignore').decode('ascii')
+        if not safe_situation:
+            safe_situation = "Выбранная ситуация"
+        
+        # Отправляем ситуацию всем в чате
+        await query.edit_message_text(
+            f"🎲 РАУНД {game['round_number']} - СИТУАЦИЯ:\n\n{safe_situation}\n\n"
+            "Игроки выбирают мемы...",
+            reply_markup=None
+        )
+        
+        # Раздаем мемы каждому игроку в ЛС
+        for player_id in game['players']:
+            if player_id != game['leader']:  # Ведущий не выбирает мем
+                await self.distribute_memes_to_player(chat_id, player_id, query.message.bot)
+        
+        print(f"✅ Выбрана ситуация: {safe_situation}")
+        
+    except Exception as e:
+        print(f"❌ Ошибка в choose_situation: {e}")
+        await query.answer("❌ Ошибка выбора ситуации!")
     
     async def distribute_memes_to_player(self, chat_id, player_id, bot):
         try:
