@@ -71,7 +71,7 @@ class FileManager:
             with open(self.used_memes_file, 'r') as f:
                 data = json.load(f)
                 return data.get('used_memes', [])
-            except:
+            except Exception:
                 return []
 
         def _mark_memes_as_used(self, memes):
