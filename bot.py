@@ -157,24 +157,31 @@ class MemesGameBot:
                 await update.message.reply_text("❌ Максимум 8 игроков достигнут!")
                 return
             
+            # Безопасное имя игрока
+            safe_player_name = user.first_name
+            try:
+                safe_player_name.encode('utf-8')
+            except UnicodeEncodeError:
+                safe_player_name = f"Игрок{len(game['players']) + 1}"
+            
             # Добавляем игрока
             game['players'].append(user.id)
-            game['player_names'][user.id] = user.first_name
+            game['player_names'][user.id] = safe_player_name
             game['scores'][user.id] = 0
             self.db.add_user(user.id, user.username, user.first_name, user.last_name)
             
-            print(f"✅ Игрок {user.first_name} добавлен в игру {chat_id}")
+            print(f"✅ Игрок {safe_player_name} добавлен в игру {chat_id}")
             
-            # Отправляем уведомление в чат о новом игроке
-            await context.bot.send_message(
-                chat_id,
-                f"✅ {user.first_name} присоединился к игре!\n"
-                f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
-            )
+            # Безопасное сообщение для чата
+            try:
+                message_text = f"✅ {safe_player_name} присоединился к игре!\nИгроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
+                message_text.encode('utf-8')
+                await context.bot.send_message(chat_id, message_text)
+            except UnicodeEncodeError:
+                await context.bot.send_message(chat_id, f"✅ Новый игрок присоединился! Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}")
             
             await update.message.reply_text(
-                f"✅ Вы присоединились к игре!\n"
-                f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
+                f"✅ Вы присоединились к игре!\nИгроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
             )
             
         except ValueError:
@@ -203,19 +210,39 @@ class MemesGameBot:
             situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
             game['situations'] = situations
             
-            # Создаем клавиатуру с ситуациями
+            # Создаем клавиатуру с ситуациями (безопасно для кодировки)
             keyboard = []
             for i, situation in enumerate(situations):
+                # Безопасная обработка текста
+                try:
+                    button_text = situation[:40] + "..." if len(situation) > 40 else situation
+                    # Проверяем кодировку
+                    button_text.encode('utf-8')
+                except UnicodeEncodeError:
+                    button_text = f"Ситуация {i+1}"
+                    
                 keyboard.append([InlineKeyboardButton(
-                    situation[:40] + "..." if len(situation) > 40 else situation,
+                    button_text,
                     callback_data=f"situation_{i}"
                 )])
             
+            # Безопасное получение имени ведущего
             leader_name = game['player_names'][game['leader']]
+            try:
+                leader_name.encode('utf-8')
+            except UnicodeEncodeError:
+                leader_name = "Ведущий"
+            
+            # Безопасное сообщение
+            try:
+                message_text = f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:"
+                message_text.encode('utf-8')
+            except UnicodeEncodeError:
+                message_text = f"📝 Ведущий, выберите ситуацию для раунда {game['round_number']}:"
             
             # Отправляем новое сообщение вместо редактирования
             await query.message.reply_text(
-                f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:",
+                message_text,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             
@@ -240,19 +267,27 @@ class MemesGameBot:
             game['status'] = 'players_choosing'
             game['submitted_memes'] = {}  # user_id -> meme_data
             
-            # Отправляем ситуацию всем в чате
-            await query.edit_message_text(
-                f"🎲 РАУНД {game['round_number']} - СИТУАЦИЯ:\n\n{chosen_situation}\n\n"
-                "Игроки выбирают мемы...",
-                reply_markup=None
-            )
+            # Безопасное отображение ситуации
+            safe_situation = chosen_situation
+            try:
+                safe_situation.encode('utf-8')
+            except UnicodeEncodeError:
+                safe_situation = "Выбранная ситуация"
+            
+            # Безопасное сообщение
+            try:
+                message_text = f"🎲 РАУНД {game['round_number']} - СИТУАЦИЯ:\n\n{safe_situation}\n\nИгроки выбирают мемы..."
+                message_text.encode('utf-8')
+                await query.edit_message_text(message_text, reply_markup=None)
+            except UnicodeEncodeError:
+                await query.edit_message_text(f"🎲 РАУНД {game['round_number']} - Новая ситуация!\n\nИгроки выбирают мемы...", reply_markup=None)
             
             # Раздаем мемы каждому игроку в ЛС
             for player_id in game['players']:
                 if player_id != game['leader']:  # Ведущий не выбирает мем
                     await self.distribute_memes_to_player(chat_id, player_id, query.message.bot)
             
-            print(f"✅ Выбрана ситуация: {chosen_situation}")
+            print(f"✅ Выбрана ситуация")
             
         except Exception as e:
             print(f"❌ Ошибка в choose_situation: {e}")
