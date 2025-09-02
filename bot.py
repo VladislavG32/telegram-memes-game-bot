@@ -86,7 +86,7 @@ class MemesGameBot:
             "🎮 Игра создана!\n"
             f"Игроков: 1/{Config.MAX_PLAYERS}\n\n"
             "Отправьте друзьям команду чтобы присоединиться:\n"
-            f"/join_{chat_id}",
+            f"/join {chat_id}",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("▶️ Начать игру", callback_data=f"begin_{chat_id}")]
             ])
