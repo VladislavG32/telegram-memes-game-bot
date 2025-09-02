@@ -41,8 +41,14 @@ class FileManager:
     def get_random_memes(self, count=6):
         all_memes = self.get_all_memes()
         if not all_memes:
-            # Возвращаем заглушки, если нет мемов
-            return [{'filename': f'stub_{i}.jpg', 'path': 'stub'} for i in range(count)]
+            # Создаем заглушки если нет мемов
+            stub_memes = []
+            for i in range(count):
+                stub_memes.append({
+                    'filename': f'stub_{i}.jpg', 
+                    'path': os.path.join(os.path.dirname(__file__), 'assets', f'stub_{i}.jpg')
+                })
+            return stub_memes
             
         used_memes = self._load_used_memes()
         available_memes = [m for m in all_memes if m['filename'] not in used_memes]
@@ -50,8 +56,14 @@ class FileManager:
         # Если доступных мемов меньше нужного количества, сбрасываем использованные
         if len(available_memes) < count:
             print("⚠️ Доступные мемы закончились, сбрасываем список использованных")
-            used_memes = []
+            self.reset_used_memes()
             available_memes = all_memes
+        
+        # Если все равно недостаточно мемов, используем повторно
+        if len(available_memes) < count:
+            needed = count - len(available_memes)
+            additional_memes = random.sample(all_memes, min(needed, len(all_memes)))
+            available_memes.extend(additional_memes)
         
         selected_memes = random.sample(available_memes, min(count, len(available_memes)))
         self._mark_memes_as_used([m['filename'] for m in selected_memes])
