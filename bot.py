@@ -43,81 +43,94 @@ class MemesGameBot:
         self.user_sessions = {}  # Для хранения текущих мемов пользователя
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user = update.effective_user
-        chat_id = update.effective_chat.id
-        
-        self.db.add_user(user.id, user.username, user.first_name, user.last_name)
-        
-        keyboard = [
-            [InlineKeyboardButton("🎮 Начать игру", callback_data="start_game")],
-            [InlineKeyboardButton("📋 Правила", callback_data="show_rules")],
-            [InlineKeyboardButton("📊 Статистика", callback_data="show_stats")],
-            [InlineKeyboardButton("🏆 Лидерборд", callback_data="show_leaderboard")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            f"Привет, {user.first_name}! 👋\n"
-            "Добро пожаловать в игру 'Мемы по ситуации'!\n\n"
-            "Собери 2-8 друзей и начните веселье!",
-            reply_markup=reply_markup
-        )
+        try:
+            user = update.effective_user
+            chat_id = update.effective_chat.id
+            
+            self.db.add_user(user.id, user.username, user.first_name, user.last_name)
+            
+            keyboard = [
+                [InlineKeyboardButton("🎮 Начать игру", callback_data="start_game")],
+                [InlineKeyboardButton("📋 Правила", callback_data="show_rules")],
+                [InlineKeyboardButton("📊 Статистика", callback_data="show_stats")],
+                [InlineKeyboardButton("🏆 Лидерборд", callback_data="show_leaderboard")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"Привет, {user.first_name}! 👋\n"
+                "Добро пожаловать в игру 'Мемы по ситуации'!\n\n"
+                "Собери 2-8 друзей и начните веселье!",
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            print(f"❌ Ошибка в start: {e}")
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        query = update.callback_query
-        await query.answer()
-        
-        callback_data = query.data
-        
-        if callback_data == "start_game":
-            await self.start_game(query)
-        elif callback_data == "show_rules":
-            await self.show_rules(query)
-        elif callback_data == "show_stats":
-            await self.show_stats(query)
-        elif callback_data == "show_leaderboard":
-            await self.show_leaderboard(query)
-        elif callback_data.startswith("situation_"):
-            await self.choose_situation(query)
-        elif callback_data.startswith("begin_"):
-            await self.begin_game(query)
-        elif callback_data.startswith("memechoice_"):
-            await self.handle_meme_choice(query)
-        elif callback_data.startswith("vote_"):
-            await self.handle_vote(query)
-        elif callback_data.startswith("nextround_"):
-            await self.next_round(query)
-        elif callback_data.startswith("endgame_"):
-            await self.end_game(query)
+        try:
+            query = update.callback_query
+            await query.answer()
+            
+            callback_data = query.data
+            
+            if callback_data == "start_game":
+                await self.start_game(query)
+            elif callback_data == "show_rules":
+                await self.show_rules(query)
+            elif callback_data == "show_stats":
+                await self.show_stats(query)
+            elif callback_data == "show_leaderboard":
+                await self.show_leaderboard(query)
+            elif callback_data.startswith("situation_"):
+                await self.choose_situation(query)
+            elif callback_data.startswith("begin_"):
+                await self.begin_game(query)
+            elif callback_data.startswith("memechoice_"):
+                await self.handle_meme_choice(query)
+            elif callback_data.startswith("vote_"):
+                await self.handle_vote(query)
+            elif callback_data.startswith("nextround_"):
+                await self.next_round(query)
+            elif callback_data.startswith("endgame_"):
+                await self.end_game(query)
+        except Exception as e:
+            print(f"❌ Ошибка в handle_callback: {e}")
+            try:
+                await query.answer("❌ Произошла ошибка!")
+            except:
+                pass
     
     async def start_game(self, query):
-        chat_id = query.message.chat_id
-        user_id = query.from_user.id
-        
-        # Создаем новую игру
-        self.active_games[chat_id] = {
-            'players': [user_id],
-            'player_names': {user_id: query.from_user.first_name},
-            'status': 'waiting',
-            'leader': user_id,
-            'round_number': 0,
-            'scores': {user_id: 0},
-            'submitted_memes': {},
-            'voting_options': {},
-            'message_id': query.message.message_id
-        }
-        
-        await query.edit_message_text(
-            "🎮 Игра создана!\n"
-            f"Игроков: 1/{Config.MAX_PLAYERS}\n\n"
-            "Отправьте друзьям команду чтобы присоединиться:\n"
-            f"/join_{chat_id}\n\n"
-            "Когда все присоединятся, нажмите 'Начать игру'",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("▶️ Начать игру", callback_data=f"begin_{chat_id}")],
-                [InlineKeyboardButton("❌ Отменить игру", callback_data=f"endgame_{chat_id}")]
-            ])
-        )
+        try:
+            chat_id = query.message.chat_id
+            user_id = query.from_user.id
+            
+            # Создаем новую игру
+            self.active_games[chat_id] = {
+                'players': [user_id],
+                'player_names': {user_id: query.from_user.first_name},
+                'status': 'waiting',
+                'leader': user_id,
+                'round_number': 0,
+                'scores': {user_id: 0},
+                'submitted_memes': {},
+                'voting_options': {}
+            }
+            
+            await query.edit_message_text(
+                "🎮 Игра создана!\n"
+                f"Игроков: 1/{Config.MAX_PLAYERS}\n\n"
+                "Отправьте друзьям команду чтобы присоединиться:\n"
+                f"/join_{chat_id}\n\n"
+                "Когда все присоединятся, нажмите 'Начать игру'",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("▶️ Начать игру", callback_data=f"begin_{chat_id}")],
+                    [InlineKeyboardButton("❌ Отменить игру", callback_data=f"endgame_{chat_id}")]
+                ])
+            )
+        except Exception as e:
+            print(f"❌ Ошибка в start_game: {e}")
+            await query.answer("❌ Ошибка создания игры!")
     
     async def join_game(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
@@ -152,24 +165,15 @@ class MemesGameBot:
             
             print(f"✅ Игрок {user.first_name} добавлен в игру {chat_id}")
             
-            # Обновляем сообщение о создании игры
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=game.get('message_id'),
-                    text=f"🎮 Игра создана!\nИгроков: {len(game['players'])}/{Config.MAX_PLAYERS}\n\n"
-                         f"Отправьте друзьям команду: /join_{chat_id}\n\n"
-                         "Когда все присоединятся, нажмите 'Начать игру'",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("▶️ Начать игру", callback_data=f"begin_{chat_id}")],
-                        [InlineKeyboardButton("❌ Отменить игру", callback_data=f"endgame_{chat_id}")]
-                    ])
-                )
-            except Exception as e:
-                print(f"❌ Ошибка обновления сообщения: {e}")
+            # Отправляем уведомление в чат о новом игроке
+            await context.bot.send_message(
+                chat_id,
+                f"✅ {user.first_name} присоединился к игре!\n"
+                f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
+            )
             
             await update.message.reply_text(
-                f"✅ {user.first_name} присоединился к игре!\n"
+                f"✅ Вы присоединились к игре!\n"
                 f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
             )
             
@@ -180,66 +184,79 @@ class MemesGameBot:
             await update.message.reply_text("❌ Ошибка присоединения к игре")
     
     async def begin_game(self, query):
-        chat_id = int(query.data.split('_')[1])
-        game = self.active_games.get(chat_id)
-        
-        if not game:
-            await query.answer("❌ Игра не найдена!")
-            return
-        
-        if len(game['players']) < Config.MIN_PLAYERS:
-            await query.answer("❌ Нужно минимум 2 игрока!")
-            return
-        
-        game['round_number'] = 1
-        game['status'] = 'choosing_situation'
-        
-        # Получаем случайные ситуации
-        situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
-        game['situations'] = situations
-        
-        # Создаем клавиатуру с ситуациями
-        keyboard = []
-        for i, situation in enumerate(situations):
-            keyboard.append([InlineKeyboardButton(
-                situation[:40] + "..." if len(situation) > 40 else situation,
-                callback_data=f"situation_{i}"
-            )])
-        
-        leader_name = game['player_names'][game['leader']]
-        
-        await query.edit_message_text(
-            f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            chat_id = int(query.data.split('_')[1])
+            game = self.active_games.get(chat_id)
+            
+            if not game:
+                await query.answer("❌ Игра не найдена!")
+                return
+            
+            if len(game['players']) < Config.MIN_PLAYERS:
+                await query.answer(f"❌ Нужно минимум {Config.MIN_PLAYERS} игрока!")
+                return
+            
+            game['round_number'] = 1
+            game['status'] = 'choosing_situation'
+            
+            # Получаем случайные ситуации
+            situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
+            game['situations'] = situations
+            
+            # Создаем клавиатуру с ситуациями
+            keyboard = []
+            for i, situation in enumerate(situations):
+                keyboard.append([InlineKeyboardButton(
+                    situation[:40] + "..." if len(situation) > 40 else situation,
+                    callback_data=f"situation_{i}"
+                )])
+            
+            leader_name = game['player_names'][game['leader']]
+            
+            # Отправляем новое сообщение вместо редактирования
+            await query.message.reply_text(
+                f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+            await query.answer("🎮 Игра началась!")
+            
+        except Exception as e:
+            print(f"❌ Ошибка в begin_game: {e}")
+            await query.answer("❌ Ошибка начала игры!")
     
     async def choose_situation(self, query):
-        chat_id = query.message.chat_id
-        game = self.active_games.get(chat_id)
-        
-        if not game or query.from_user.id != game['leader']:
-            await query.answer("❌ Только ведущий может выбирать!")
-            return
-        
-        situation_index = int(query.data.split('_')[1])
-        chosen_situation = game['situations'][situation_index]
-        game['current_situation'] = chosen_situation
-        game['status'] = 'players_choosing'
-        game['submitted_memes'] = {}  # user_id -> meme_data
-        
-        # Отправляем ситуацию всем в чате
-        await query.edit_message_text(
-            f"🎲 РАУНД {game['round_number']} - СИТУАЦИЯ:\n\n{chosen_situation}\n\n"
-            "Игроки выбирают мемы...",
-            reply_markup=None
-        )
-        
-        # Раздаем мемы каждому игроку в ЛС
-        for player_id in game['players']:
-            if player_id != game['leader']:  # Ведущий не выбирает мем
-                await self.distribute_memes_to_player(chat_id, player_id, query.message.bot)
-        
-        print(f"✅ Выбрана ситуация: {chosen_situation}")
+        try:
+            chat_id = query.message.chat_id
+            game = self.active_games.get(chat_id)
+            
+            if not game or query.from_user.id != game['leader']:
+                await query.answer("❌ Только ведущий может выбирать!")
+                return
+            
+            situation_index = int(query.data.split('_')[1])
+            chosen_situation = game['situations'][situation_index]
+            game['current_situation'] = chosen_situation
+            game['status'] = 'players_choosing'
+            game['submitted_memes'] = {}  # user_id -> meme_data
+            
+            # Отправляем ситуацию всем в чате
+            await query.edit_message_text(
+                f"🎲 РАУНД {game['round_number']} - СИТУАЦИЯ:\n\n{chosen_situation}\n\n"
+                "Игроки выбирают мемы...",
+                reply_markup=None
+            )
+            
+            # Раздаем мемы каждому игроку в ЛС
+            for player_id in game['players']:
+                if player_id != game['leader']:  # Ведущий не выбирает мем
+                    await self.distribute_memes_to_player(chat_id, player_id, query.message.bot)
+            
+            print(f"✅ Выбрана ситуация: {chosen_situation}")
+            
+        except Exception as e:
+            print(f"❌ Ошибка в choose_situation: {e}")
+            await query.answer("❌ Ошибка выбора ситуации!")
     
     async def distribute_memes_to_player(self, chat_id, player_id, bot):
         try:
@@ -270,15 +287,19 @@ class MemesGameBot:
             # Отправляем каждый мем как медиа
             media_group = []
             for i, meme in enumerate(memes):
-                file_path = meme['path']
-                if meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
-                    media = InputMediaVideo(media=open(file_path, 'rb'), caption=f"Мем {i+1}" if i == 0 else "")
-                else:
-                    media = InputMediaPhoto(media=open(file_path, 'rb'), caption=f"Мем {i+1}" if i == 0 else "")
-                media_group.append(media)
+                try:
+                    file_path = meme['path']
+                    if meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
+                        media = InputMediaVideo(media=open(file_path, 'rb'), caption=f"Мем {i+1}" if i == 0 else "")
+                    else:
+                        media = InputMediaPhoto(media=open(file_path, 'rb'), caption=f"Мем {i+1}" if i == 0 else "")
+                    media_group.append(media)
+                except Exception as e:
+                    print(f"❌ Ошибка загрузки мема {meme['filename']}: {e}")
+                    continue
             
-            # Отправляем медиагруппу
-            await bot.send_media_group(player_id, media=media_group)
+            if media_group:
+                await bot.send_media_group(player_id, media=media_group)
             
             # Отправляем кнопки для выбора
             await bot.send_message(
@@ -337,63 +358,71 @@ class MemesGameBot:
             await query.answer("❌ Ошибка выбора мема!")
     
     async def start_voting(self, chat_id, bot):
-        game = self.active_games[chat_id]
-        game['status'] = 'voting'
-        
-        # Отправляем все мемы ведущему для голосования
-        leader_id = game['leader']
-        
-        if not game['submitted_memes']:
-            await bot.send_message(chat_id, "❌ Никто не отправил мемы! Раунд пропущен.")
-            await self.next_round_auto(chat_id, bot)
-            return
-        
-        # Отправляем каждый мем ведущему
-        voting_options = {}
-        media_group = []
-        
-        for i, (user_id, meme_data) in enumerate(game['submitted_memes'].items()):
-            meme = meme_data['meme']
-            player_name = meme_data['player_name']
-            option_id = str(uuid.uuid4())[:8]  # Уникальный ID для варианта голосования
-            voting_options[option_id] = user_id
+        try:
+            game = self.active_games[chat_id]
+            game['status'] = 'voting'
             
-            caption = f"🎭 Вариант от {player_name}" if i == 0 else ""
+            # Отправляем все мемы ведущему для голосования
+            leader_id = game['leader']
             
-            if meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
-                media = InputMediaVideo(media=open(meme['path'], 'rb'), caption=caption)
-            else:
-                media = InputMediaPhoto(media=open(meme['path'], 'rb'), caption=caption)
+            if not game['submitted_memes']:
+                await bot.send_message(chat_id, "❌ Никто не отправил мемы! Раунд пропущен.")
+                await self.next_round_auto(chat_id, bot)
+                return
             
-            media_group.append(media)
-        
-        game['voting_options'] = voting_options
-        
-        # Отправляем медиагруппу
-        await bot.send_media_group(leader_id, media=media_group)
-        
-        # Создаем клавиатуру для голосования
-        keyboard = []
-        temp_row = []
-        for i, option_id in enumerate(voting_options.keys()):
-            temp_row.append(InlineKeyboardButton(f"🎯 {i+1}", callback_data=f"vote_{chat_id}_{option_id}"))
-            if len(temp_row) >= 3:  # 3 кнопки в ряд
+            # Отправляем каждый мем ведущему
+            voting_options = {}
+            media_group = []
+            
+            for i, (user_id, meme_data) in enumerate(game['submitted_memes'].items()):
+                meme = meme_data['meme']
+                player_name = meme_data['player_name']
+                option_id = str(uuid.uuid4())[:8]  # Уникальный ID для варианта голосования
+                voting_options[option_id] = user_id
+                
+                caption = f"🎭 Вариант от {player_name}" if i == 0 else ""
+                
+                try:
+                    if meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
+                        media = InputMediaVideo(media=open(meme['path'], 'rb'), caption=caption)
+                    else:
+                        media = InputMediaPhoto(media=open(meme['path'], 'rb'), caption=caption)
+                    media_group.append(media)
+                except Exception as e:
+                    print(f"❌ Ошибка загрузки мема для голосования: {e}")
+                    continue
+            
+            game['voting_options'] = voting_options
+            
+            # Отправляем медиагруппу
+            if media_group:
+                await bot.send_media_group(leader_id, media=media_group)
+            
+            # Создаем клавиатуру для голосования
+            keyboard = []
+            temp_row = []
+            for i, option_id in enumerate(voting_options.keys()):
+                temp_row.append(InlineKeyboardButton(f"🎯 {i+1}", callback_data=f"vote_{chat_id}_{option_id}"))
+                if len(temp_row) >= 3:  # 3 кнопки в ряд
+                    keyboard.append(temp_row)
+                    temp_row = []
+            if temp_row:
                 keyboard.append(temp_row)
-                temp_row = []
-        if temp_row:
-            keyboard.append(temp_row)
-        
-        await bot.send_message(
-            leader_id,
-            f"📊 {game['player_names'][leader_id]}, выберите самый смешной мем для ситуации:\n\n{game['current_situation']}",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        
-        # Уведомляем всех в основном чате
-        await bot.send_message(
-            chat_id,
-            "📊 Все мемы отправлены! Ведущий выбирает победителя..."
-        )
+            
+            await bot.send_message(
+                leader_id,
+                f"📊 {game['player_names'][leader_id]}, выберите самый смешной мем для ситуации:\n\n{game['current_situation']}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+            # Уведомляем всех в основном чате
+            await bot.send_message(
+                chat_id,
+                "📊 Все мемы отправлены! Ведущий выбирает победителя..."
+            )
+            
+        except Exception as e:
+            print(f"❌ Ошибка в start_voting: {e}")
     
     async def handle_vote(self, query):
         try:
@@ -425,29 +454,42 @@ class MemesGameBot:
             # Отправляем результаты в чат
             winner_meme = game['submitted_memes'][winner_id]['meme']
             
-            if winner_meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
-                await query.message.bot.send_video(
+            try:
+                if winner_meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
+                    await query.message.bot.send_video(
+                        chat_id,
+                        video=open(winner_meme['path'], 'rb'),
+                        caption=f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
+                               f"Ситуация: {game['current_situation']}\n\n"
+                               f"💯 Текущие очки:\n" + 
+                               "\n".join([f"{name}: {score}" for name, score in sorted(
+                                   [(game['player_names'][pid], score) for pid, score in game['scores'].items()],
+                                   key=lambda x: x[1], reverse=True
+                               )])
+                    )
+                else:
+                    await query.message.bot.send_photo(
+                        chat_id,
+                        photo=open(winner_meme['path'], 'rb'),
+                        caption=f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
+                               f"Ситуация: {game['current_situation']}\n\n"
+                               f"💯 Текущие очки:\n" + 
+                               "\n".join([f"{name}: {score}" for name, score in sorted(
+                                   [(game['player_names'][pid], score) for pid, score in game['scores'].items()],
+                                   key=lambda x: x[1], reverse=True
+                               )])
+                    )
+            except Exception as e:
+                print(f"❌ Ошибка отправки мема победителя: {e}")
+                await query.message.bot.send_message(
                     chat_id,
-                    video=open(winner_meme['path'], 'rb'),
-                    caption=f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
-                           f"Ситуация: {game['current_situation']}\n\n"
-                           f"💯 Текущие очки:\n" + 
-                           "\n".join([f"{name}: {score}" for name, score in sorted(
-                               [(game['player_names'][pid], score) for pid, score in game['scores'].items()],
-                               key=lambda x: x[1], reverse=True
-                           )])
-                )
-            else:
-                await query.message.bot.send_photo(
-                    chat_id,
-                    photo=open(winner_meme['path'], 'rb'),
-                    caption=f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
-                           f"Ситуация: {game['current_situation']}\n\n"
-                           f"💯 Текущие очки:\n" + 
-                           "\n".join([f"{name}: {score}" for name, score in sorted(
-                               [(game['player_names'][pid], score) for pid, score in game['scores'].items()],
-                               key=lambda x: x[1], reverse=True
-                           )])
+                    f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
+                    f"Ситуация: {game['current_situation']}\n\n"
+                    f"💯 Текущие очки:\n" + 
+                    "\n".join([f"{name}: {score}" for name, score in sorted(
+                        [(game['player_names'][pid], score) for pid, score in game['scores'].items()],
+                        key=lambda x: x[1], reverse=True
+                    )])
                 )
             
             # Предлагаем начать следующий раунд
@@ -468,73 +510,85 @@ class MemesGameBot:
             await query.answer("❌ Ошибка голосования!")
     
     async def next_round(self, query):
-        chat_id = int(query.data.split('_')[1])
-        await self.next_round_auto(chat_id, query.message.bot)
-        await query.answer("🔄 Подготовка следующего раунда...")
+        try:
+            chat_id = int(query.data.split('_')[1])
+            await self.next_round_auto(chat_id, query.message.bot)
+            await query.answer("🔄 Подготовка следующего раунда...")
+        except Exception as e:
+            print(f"❌ Ошибка в next_round: {e}")
+            await query.answer("❌ Ошибка перехода к следующему раунду!")
     
     async def next_round_auto(self, chat_id, bot):
-        game = self.active_games.get(chat_id)
-        if not game:
-            return
-        
-        # Меняем ведущего по кругу
-        current_leader_index = game['players'].index(game['leader'])
-        next_leader_index = (current_leader_index + 1) % len(game['players'])
-        game['leader'] = game['players'][next_leader_index]
-        game['round_number'] += 1
-        
-        # Начинаем новый раунд
-        game['status'] = 'choosing_situation'
-        situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
-        game['situations'] = situations
-        
-        # Создаем клавиатуру с ситуациями
-        keyboard = []
-        for i, situation in enumerate(situations):
-            keyboard.append([InlineKeyboardButton(
-                situation[:40] + "..." if len(situation) > 40 else situation,
-                callback_data=f"situation_{i}"
-            )])
-        
-        leader_name = game['player_names'][game['leader']]
-        
-        await bot.send_message(
-            chat_id,
-            f"🔄 РАУНД {game['round_number']}\n📝 {leader_name}, выберите ситуацию:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            game = self.active_games.get(chat_id)
+            if not game:
+                return
+            
+            # Меняем ведущего по кругу
+            current_leader_index = game['players'].index(game['leader'])
+            next_leader_index = (current_leader_index + 1) % len(game['players'])
+            game['leader'] = game['players'][next_leader_index]
+            game['round_number'] += 1
+            
+            # Начинаем новый раунд
+            game['status'] = 'choosing_situation'
+            situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
+            game['situations'] = situations
+            
+            # Создаем клавиатуру с ситуациями
+            keyboard = []
+            for i, situation in enumerate(situations):
+                keyboard.append([InlineKeyboardButton(
+                    situation[:40] + "..." if len(situation) > 40 else situation,
+                    callback_data=f"situation_{i}"
+                )])
+            
+            leader_name = game['player_names'][game['leader']]
+            
+            await bot.send_message(
+                chat_id,
+                f"🔄 РАУНД {game['round_number']}\n📝 {leader_name}, выберите ситуацию:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            print(f"❌ Ошибка в next_round_auto: {e}")
     
     async def end_game(self, query):
-        chat_id = int(query.data.split('_')[1])
-        game = self.active_games.get(chat_id)
-        
-        if not game:
-            await query.answer("❌ Игра не найдена!")
-            return
-        
-        # Определяем победителя
-        if game['scores']:
-            winner_id = max(game['scores'], key=game['scores'].get)
-            winner_name = game['player_names'][winner_id]
-            winner_score = game['scores'][winner_id]
+        try:
+            chat_id = int(query.data.split('_')[1])
+            game = self.active_games.get(chat_id)
             
-            # Формируем таблицу результатов
-            results = "🏆 ФИНАЛЬНЫЕ РЕЗУЛЬТАТЫ:\n\n"
-            sorted_players = sorted(game['scores'].items(), key=lambda x: x[1], reverse=True)
+            if not game:
+                await query.answer("❌ Игра не найдена!")
+                return
             
-            for i, (player_id, score) in enumerate(sorted_players, 1):
-                player_name = game['player_names'][player_id]
-                results += f"{i}. {player_name}: {score} очков\n"
+            # Определяем победителя
+            if game['scores']:
+                winner_id = max(game['scores'], key=game['scores'].get)
+                winner_name = game['player_names'][winner_id]
+                winner_score = game['scores'][winner_id]
+                
+                # Формируем таблицу результатов
+                results = "🏆 ФИНАЛЬНЫЕ РЕЗУЛЬТАТЫ:\n\n"
+                sorted_players = sorted(game['scores'].items(), key=lambda x: x[1], reverse=True)
+                
+                for i, (player_id, score) in enumerate(sorted_players, 1):
+                    player_name = game['player_names'][player_id]
+                    results += f"{i}. {player_name}: {score} очков\n"
+                
+                results += f"\n🎉 ПОБЕДИТЕЛЬ: {winner_name} с {winner_score} очками!"
+                
+                await query.edit_message_text(results)
+            else:
+                await query.edit_message_text("🎮 Игра завершена! Никто не набрал очков.")
             
-            results += f"\n🎉 ПОБЕДИТЕЛЬ: {winner_name} с {winner_score} очками!"
-            
-            await query.edit_message_text(results)
-        else:
-            await query.edit_message_text("🎮 Игра завершена! Никто не набрал очков.")
-        
-        # Удаляем игру из активных
-        if chat_id in self.active_games:
-            del self.active_games[chat_id]
+            # Удаляем игру из активных
+            if chat_id in self.active_games:
+                del self.active_games[chat_id]
+                
+        except Exception as e:
+            print(f"❌ Ошибка в end_game: {e}")
+            await query.answer("❌ Ошибка завершения игры!")
     
     async def show_rules(self, query):
         rules_text = """
@@ -562,67 +616,78 @@ class MemesGameBot:
         await query.edit_message_text(rules_text)
     
     async def show_stats(self, query):
-        """Показать статистику пользователя"""
-        user_id = query.from_user.id
-        user_stats = self.db.get_user_stats(user_id)
-        
-        stats_text = f"""
+        try:
+            user_id = query.from_user.id
+            user_stats = self.db.get_user_stats(user_id)
+            
+            stats_text = f"""
 📊 СТАТИСТИКА {query.from_user.first_name}:
 
 🎮 Сыграно игр: {user_stats['games_played']}
 🏆 Всего очков: {user_stats['total_score']}
 📈 Средний результат: {user_stats['total_score'] / user_stats['games_played'] if user_stats['games_played'] > 0 else 0:.1f}
-        """
-        
-        await query.edit_message_text(stats_text)
+            """
+            
+            await query.edit_message_text(stats_text)
+        except Exception as e:
+            print(f"❌ Ошибка в show_stats: {e}")
+            await query.answer("❌ Ошибка загрузки статистики!")
     
     async def show_leaderboard(self, query):
-        """Показать таблицу лидеров"""
-        leaderboard_data = self.db.get_leaderboard(10)
-        
-        if not leaderboard_data:
-            await query.edit_message_text("📊 Пока никто не играл! Будьте первым!")
-            return
-        
-        leaderboard_text = "🏆 ТОП-10 ИГРОКОВ:\n\n"
-        for i, player in enumerate(leaderboard_data, 1):
-            username = player['username'] or player['first_name']
-            leaderboard_text += f"{i}. {username} - {player['total_score']} очков ({player['games_played']} игр)\n"
-        
-        await query.edit_message_text(leaderboard_text)
+        try:
+            leaderboard_data = self.db.get_leaderboard(10)
+            
+            if not leaderboard_data:
+                await query.edit_message_text("📊 Пока никто не играл! Будьте первым!")
+                return
+            
+            leaderboard_text = "🏆 ТОП-10 ИГРОКОВ:\n\n"
+            for i, player in enumerate(leaderboard_data, 1):
+                username = player['username'] or player['first_name']
+                leaderboard_text += f"{i}. {username} - {player['total_score']} очков ({player['games_played']} игр)\n"
+            
+            await query.edit_message_text(leaderboard_text)
+        except Exception as e:
+            print(f"❌ Ошибка в show_leaderboard: {e}")
+            await query.answer("❌ Ошибка загрузки лидерборда!")
     
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда для показа статистики"""
-        user_id = update.effective_user.id
-        user_stats = self.db.get_user_stats(user_id)
-        
-        stats_text = f"""
+        try:
+            user_id = update.effective_user.id
+            user_stats = self.db.get_user_stats(user_id)
+            
+            stats_text = f"""
 📊 СТАТИСТИКА {update.effective_user.first_name}:
 
 🎮 Сыграно игр: {user_stats['games_played']}
 🏆 Всего очков: {user_stats['total_score']}
 📈 Средний результат: {user_stats['total_score'] / user_stats['games_played'] if user_stats['games_played'] > 0 else 0:.1f}
-        """
-        
-        await update.message.reply_text(stats_text)
+            """
+            
+            await update.message.reply_text(stats_text)
+        except Exception as e:
+            print(f"❌ Ошибка в stats_command: {e}")
+            await update.message.reply_text("❌ Ошибка загрузки статистики!")
     
     async def leaderboard_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда для показа лидерборда"""
-        leaderboard_data = self.db.get_leaderboard(10)
-        
-        if not leaderboard_data:
-            await update.message.reply_text("📊 Пока никто не играл! Будьте первым!")
-            return
-        
-        leaderboard_text = "🏆 ТОП-10 ИГРОКОВ:\n\n"
-        for i, player in enumerate(leaderboard_data, 1):
-            username = player['username'] or player['first_name']
-            leaderboard_text += f"{i}. {username} - {player['total_score']} очков ({player['games_played']} игр)\n"
-        
-        await update.message.reply_text(leaderboard_text)
+        try:
+            leaderboard_data = self.db.get_leaderboard(10)
+            
+            if not leaderboard_data:
+                await update.message.reply_text("📊 Пока никто не играл! Будьте первым!")
+                return
+            
+            leaderboard_text = "🏆 ТОП-10 ИГРОКОВ:\n\n"
+            for i, player in enumerate(leaderboard_data, 1):
+                username = player['username'] or player['first_name']
+                leaderboard_text += f"{i}. {username} - {player['total_score']} очков ({player['games_played']} игр)\n"
+            
+            await update.message.reply_text(leaderboard_text)
+        except Exception as e:
+            print(f"❌ Ошибка в leaderboard_command: {e}")
+            await update.message.reply_text("❌ Ошибка загрузки лидерборда!")
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда помощи"""
         help_text = """
 🤖 КОМАНДЫ БОТА:
 
@@ -648,21 +713,25 @@ def main():
         logging.error("BOT_TOKEN не найден! Проверьте .env файл")
         return
     
-    application = Application.builder().token(Config.BOT_TOKEN).build()
-    bot = MemesGameBot()
-    
-    # Добавляем обработчики команд
-    application.add_handler(CommandHandler("start", bot.start))
-    application.add_handler(CommandHandler("join", bot.join_game))
-    application.add_handler(CommandHandler("stats", bot.stats_command))
-    application.add_handler(CommandHandler("leaderboard", bot.leaderboard_command))
-    application.add_handler(CommandHandler("help", bot.help_command))
-    
-    # Добавляем обработчики callback-запросов
-    application.add_handler(CallbackQueryHandler(bot.handle_callback))
-    
-    print("✅ Бот запускается...")
-    application.run_polling()
+    try:
+        application = Application.builder().token(Config.BOT_TOKEN).build()
+        bot = MemesGameBot()
+        
+        # Добавляем обработчики команд
+        application.add_handler(CommandHandler("start", bot.start))
+        application.add_handler(CommandHandler("join", bot.join_game))
+        application.add_handler(CommandHandler("stats", bot.stats_command))
+        application.add_handler(CommandHandler("leaderboard", bot.leaderboard_command))
+        application.add_handler(CommandHandler("help", bot.help_command))
+        
+        # Добавляем обработчики callback-запросов
+        application.add_handler(CallbackQueryHandler(bot.handle_callback))
+        
+        print("✅ Бот запускается...")
+        application.run_polling()
+        
+    except Exception as e:
+        print(f"❌ Критическая ошибка при запуске бота: {e}")
 
 if __name__ == "__main__":
     main()
