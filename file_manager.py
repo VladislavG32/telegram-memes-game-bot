@@ -5,14 +5,22 @@ from config import Config
 
 class FileManager:
     def __init__(self):
+        print("=== FileManager инициализация ===")
         self.memes_dir = Config.MEMES_DIR
         self.situations_file = Config.SITUATIONS_FILE
         self.used_memes_file = Config.USED_MEMES_FILE
+        
+        print(f"MEMES_DIR: {self.memes_dir}")
+        print(f"SITUATIONS_FILE: {self.situations_file}")
+        print(f"USED_MEMES_FILE: {self.used_memes_file}")
+        
         self._ensure_directories()
+        print("=== FileManager инициализирован успешно ===")
     
     def _ensure_directories(self):
         os.makedirs(self.memes_dir, exist_ok=True)
         os.makedirs(os.path.dirname(self.used_memes_file), exist_ok=True)
+        
         if not os.path.exists(self.used_memes_file):
             with open(self.used_memes_file, 'w') as f:
                 json.dump({"used_memes": []}, f)
@@ -21,6 +29,7 @@ class FileManager:
         memes = []
         if not os.path.exists(self.memes_dir):
             return memes
+            
         for file in os.listdir(self.memes_dir):
             if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.mp4', '.mov')):
                 memes.append({
@@ -33,13 +42,17 @@ class FileManager:
         all_memes = self.get_all_memes()
         if not all_memes:
             return []
+            
         used_memes = self._load_used_memes()
         available_memes = [m for m in all_memes if m['filename'] not in used_memes]
+        
         if len(available_memes) < count:
             used_memes = []
             available_memes = all_memes
+        
         selected_memes = random.sample(available_memes, min(count, len(available_memes)))
         self._mark_memes_as_used([m['filename'] for m in selected_memes])
+        
         return selected_memes
     
     def get_all_situations(self):
@@ -48,6 +61,7 @@ class FileManager:
             with open(self.situations_file, 'w', encoding='utf-8') as f:
                 f.write("")
             return []
+        
         with open(self.situations_file, 'r', encoding='utf-8') as f:
             situations = [line.strip() for line in f if line.strip()]
         return situations
@@ -70,6 +84,7 @@ class FileManager:
         used_memes = self._load_used_memes()
         used_memes.extend(memes)
         used_memes = list(set(used_memes))
+        
         with open(self.used_memes_file, 'w') as f:
             json.dump({"used_memes": used_memes}, f)
     

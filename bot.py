@@ -1,10 +1,32 @@
 ﻿import logging
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-from database import Database
-from file_manager import FileManager
-from config import Config
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+
+print("=== Начало загрузки бота ===")
+
+try:
+    from database import Database
+    print("✅ Database импортирован успешно")
+except Exception as e:
+    print(f"❌ Ошибка импорта Database: {e}")
+    raise
+
+try:
+    from config import Config
+    print("✅ Config импортирован успешно")
+except Exception as e:
+    print(f"❌ Ошибка импорта Config: {e}")
+    raise
+
+try:
+    from file_manager import FileManager
+    print("✅ FileManager импортирован успешно")
+except Exception as e:
+    print(f"❌ Ошибка импорта FileManager: {e}")
+    raise
+
+print("=== Все импорты успешны ===")
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -46,6 +68,8 @@ class MemesGameBot:
             await self.show_rules(query)
         elif query.data.startswith("situation_"):
             await self.choose_situation(query)
+        elif query.data.startswith("begin_"):
+            await self.begin_game(query)
     
     async def start_game(self, query):
         chat_id = query.message.chat_id
@@ -70,11 +94,17 @@ class MemesGameBot:
     
     async def join_game(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
+            if not context.args:
+                await update.message.reply_text("❌ Используйте: /join_123456789")
+                return
+                
             chat_id = int(context.args[0])
             user = update.effective_user
             
+            print(f"🔄 Игрок {user.first_name} пытается присоединиться к игре {chat_id}")
+            
             if chat_id not in self.active_games:
-                await update.message.reply_text("❌ Игра не найдена!")
+                await update.message.reply_text("❌ Игра не найдена или уже завершена!")
                 return
             
             game = self.active_games[chat_id]
@@ -84,22 +114,28 @@ class MemesGameBot:
                 return
             
             if len(game['players']) >= Config.MAX_PLAYERS:
-                await update.message.reply_text("❌ Максимум игроков достигнут!")
+                await update.message.reply_text("❌ Максимум 8 игроков достигнут!")
                 return
             
+            # Добавляем игрока
             game['players'].append(user.id)
             self.db.add_user(user.id, user.username, user.first_name, user.last_name)
+            
+            print(f"✅ Игрок {user.first_name} добавлен в игру {chat_id}")
             
             await update.message.reply_text(
                 f"✅ {user.first_name} присоединился к игре!\n"
                 f"Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
             )
             
-        except (IndexError, ValueError):
+        except (ValueError):
             await update.message.reply_text("❌ Используйте: /join_123456789")
+        except Exception as e:
+            print(f"❌ Ошибка присоединения: {e}")
+            await update.message.reply_text("❌ Ошибка присоединения к игре")
     
     async def begin_game(self, query):
-        chat_id = query.message.chat_id
+        chat_id = int(query.data.split('_')[1])
         game = self.active_games.get(chat_id)
         
         if not game or len(game['players']) < Config.MIN_PLAYERS:
@@ -145,6 +181,7 @@ class MemesGameBot:
         )
         
         # TODO: Раздать мемы игрокам и обработать выбор
+        print(f"✅ Выбрана ситуация: {chosen_situation}")
     
     async def show_rules(self, query):
         rules_text = """
@@ -165,7 +202,7 @@ class MemesGameBot:
 
 def main():
     if not Config.BOT_TOKEN:
-        logging.error("BOT_TOKEN не найден!")
+        logging.error("BOT_TOKEN не найден! Проверьте .env файл")
         return
     
     application = Application.builder().token(Config.BOT_TOKEN).build()
@@ -175,6 +212,7 @@ def main():
     application.add_handler(CommandHandler("join", bot.join_game))
     application.add_handler(CallbackQueryHandler(bot.handle_callback))
     
+    print("✅ Бот запускается...")
     application.run_polling()
 
 if __name__ == "__main__":
