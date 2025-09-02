@@ -5,7 +5,7 @@ from config import Config
 
 class FileManager:
     def __init__(self):
-        print("=== FileManager инициализация ===")
+        print("=== FileManager РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ ===")
         self.memes_dir = Config.MEMES_DIR
         self.situations_file = Config.SITUATIONS_FILE
         self.used_memes_file = Config.USED_MEMES_FILE
@@ -15,7 +15,7 @@ class FileManager:
         print(f"USED_MEMES_FILE: {self.used_memes_file}")
         
         self._ensure_directories()
-        print("=== FileManager инициализирован успешно ===")
+        print("=== FileManager РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°РЅ СѓСЃРїРµС€РЅРѕ ===")
     
     def _ensure_directories(self):
         os.makedirs(self.memes_dir, exist_ok=True)
