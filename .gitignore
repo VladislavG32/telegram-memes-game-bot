@@ -1,0 +1,8 @@
+.vs/
+
+.env
+venv/
+__pycache__/
+*.pyc
+*.pyo
+game.db
