@@ -3,6 +3,42 @@ import json
 import random
 from config import Config
 
+def safe_text(text, default="Текст"):
+    """
+    Безопасная обработка текста с проблемами кодировки
+    """
+    if text is None:
+        return default
+        
+    try:
+        # Если это bytes, пробуем декодировать
+        if isinstance(text, bytes):
+            try:
+                return text.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    return text.decode('latin-1')
+                except UnicodeDecodeError:
+                    return default
+        
+        # Если это строка, проверяем кодировку
+        if isinstance(text, str):
+            # Пробуем закодировать в UTF-8
+            text.encode('utf-8')
+            return text
+            
+        # Для других типов преобразуем в строку
+        return str(text)
+        
+    except UnicodeEncodeError:
+        try:
+            # Пробуем latin-1 как fallback
+            return text.encode('latin-1').decode('utf-8', errors='ignore')
+        except:
+            return default
+    except Exception:
+        return default
+
 class FileManager:
     def __init__(self):
         print("=== FileManager инициализация ===")
@@ -41,12 +77,12 @@ class FileManager:
     def get_random_memes(self, count=6):
         all_memes = self.get_all_memes()
         if not all_memes:
-            # Создаем заглушки если нет мемов
+            # Возвращаем заглушки, если нет мемов
             stub_memes = []
             for i in range(count):
                 stub_memes.append({
                     'filename': f'stub_{i}.jpg', 
-                    'path': os.path.join(os.path.dirname(__file__), 'assets', f'stub_{i}.jpg')
+                    'path': 'stub'
                 })
             return stub_memes
             
@@ -81,9 +117,21 @@ class FileManager:
                 "Когда пытаешься объяснить IT-специалисту, что 'у меня ничего не работает'"
             ]
         
-        with open(self.situations_file, 'r', encoding='utf-8') as f:
-            situations = [line.strip() for line in f if line.strip()]
-        return situations
+        try:
+            with open(self.situations_file, 'r', encoding='utf-8') as f:
+                situations = [safe_text(line.strip()) for line in f if line.strip()]
+            return situations
+        except UnicodeDecodeError:
+            # Если UTF-8 не работает, пробуем другие кодировки
+            try:
+                with open(self.situations_file, 'r', encoding='latin-1') as f:
+                    situations = [safe_text(line.strip()) for line in f if line.strip()]
+                return situations
+            except:
+                return ["Пример ситуации: Когда кофе закончился"]
+        except Exception as e:
+            print(f"❌ Ошибка чтения файла ситуаций: {e}")
+            return ["Пример ситуации: Когда кофе закончился"]
     
     def get_random_situations(self, count=10):
         situations = self.get_all_situations()
@@ -115,15 +163,51 @@ class FileManager:
         try:
             with open(self.used_memes_file, 'w', encoding='utf-8') as f:
                 json.dump({"used_memes": []}, f, ensure_ascii=False)
+            print("✅ Список использованных мемов сброшен")
         except Exception as e:
             print(f"❌ Ошибка сброса used_memes: {e}")
     
     def add_situation(self, situation):
         """Добавить новую ситуацию в файл"""
         try:
+            safe_situation = safe_text(situation)
             with open(self.situations_file, 'a', encoding='utf-8') as f:
-                f.write(situation + '\n')
+                f.write(safe_situation + '\n')
+            print(f"✅ Ситуация добавлена: {safe_situation}")
             return True
         except Exception as e:
             print(f"❌ Ошибка добавления ситуации: {e}")
             return False
+    
+    def check_files(self):
+        """Проверка доступности файлов и папок"""
+        print("=== ПРОВЕРКА ФАЙЛОВ ===")
+        
+        # Проверка папки с мемами
+        if os.path.exists(self.memes_dir):
+            memes_count = len(self.get_all_memes())
+            print(f"✅ Папка с мемами: {memes_count} файлов")
+        else:
+            print("❌ Папка с мемами не существует")
+            os.makedirs(self.memes_dir, exist_ok=True)
+            print("✅ Папка с мемами создана")
+        
+        # Проверка файла с ситуациями
+        if os.path.exists(self.situations_file):
+            situations = self.get_all_situations()
+            print(f"✅ Файл с ситуациями: {len(situations)} ситуаций")
+        else:
+            print("❌ Файл с ситуациями не существует")
+            self.get_all_situations()  # Это создаст файл с примерами
+            print("✅ Файл с ситуациями создан")
+        
+        # Проверка файла использованных мемов
+        if os.path.exists(self.used_memes_file):
+            used_count = len(self._load_used_memes())
+            print(f"✅ Файл использованных мемов: {used_count} записей")
+        else:
+            print("❌ Файл использованных мемов не существует")
+            self._ensure_directories()
+            print("✅ Файл использованных мемов создан")
+        
+        print("=== ПРОВЕРКА ЗАВЕРШЕНА ===")
