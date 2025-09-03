@@ -5,6 +5,7 @@ import uuid
 import traceback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaVideo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.error import BadRequest, NetworkError, TimedOut
 
 print("=== Начало загрузки бота ===")
 
@@ -110,6 +111,15 @@ class MemesGameBot:
             print(f"❌ Ошибка в handle_callback: {e}")
             traceback.print_exc()
             try:
+                except BadRequest as e:
+                    print(f"❌ Ошибка Telegram API: {e}")
+                except NetworkError as e:
+                    print(f"❌ Сетевая ошибка: {e}")
+                except TimedOut as e:
+                    print(f"❌ Таймаут: {e}")
+                except Exception as e:
+                    print(f"❌ Неожиданная ошибка: {e}")
+                    traceback.print_exc()
                 await query.answer("❌ Произошла ошибка!")
             except:
                 pass
