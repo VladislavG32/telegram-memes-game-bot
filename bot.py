@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import uuid
+import traceback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaVideo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
@@ -22,7 +23,7 @@ except Exception as e:
     raise
 
 try:
-    from file_manager import FileManager
+    from file_manager import FileManager, safe_text
     print("✅ FileManager импортирован успешно")
 except Exception as e:
     print(f"❌ Ошибка импорта FileManager: {e}")
@@ -42,12 +43,23 @@ class MemesGameBot:
         self.active_games = {}
         self.user_sessions = {}  # Для хранения текущих мемов пользователя
     
+    def _safe_text(self, text, default="Текст"):
+        """
+        Безопасная обработка текста с проблемами кодировки
+        """
+        return safe_text(text, default)
+    
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             user = update.effective_user
             chat_id = update.effective_chat.id
             
-            self.db.add_user(user.id, user.username, user.first_name, user.last_name)
+            self.db.add_user(
+                user.id, 
+                self._safe_text(user.username),
+                self._safe_text(user.first_name),
+                self._safe_text(user.last_name)
+            )
             
             keyboard = [
                 [InlineKeyboardButton("🎮 Начать игру", callback_data="start_game")],
@@ -58,13 +70,14 @@ class MemesGameBot:
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await update.message.reply_text(
-                f"Привет, {user.first_name}! 👋\n"
+                self._safe_text(f"Привет, {user.first_name}! 👋\n"
                 "Добро пожаловать в игру 'Мемы по ситуации'!\n\n"
-                "Собери 2-8 друзей и начните веселье!",
+                "Собери 2-8 друзей и начните веселье!"),
                 reply_markup=reply_markup
             )
         except Exception as e:
             print(f"❌ Ошибка в start: {e}")
+            traceback.print_exc()
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
@@ -95,6 +108,7 @@ class MemesGameBot:
                 await self.end_game(query)
         except Exception as e:
             print(f"❌ Ошибка в handle_callback: {e}")
+            traceback.print_exc()
             try:
                 await query.answer("❌ Произошла ошибка!")
             except:
@@ -108,7 +122,7 @@ class MemesGameBot:
             # Создаем новую игру
             self.active_games[chat_id] = {
                 'players': [user_id],
-                'player_names': {user_id: query.from_user.first_name},
+                'player_names': {user_id: self._safe_text(query.from_user.first_name, f"Игрок1")},
                 'status': 'waiting',
                 'leader': user_id,
                 'round_number': 0,
@@ -118,11 +132,11 @@ class MemesGameBot:
             }
             
             await query.edit_message_text(
-                "🎮 Игра создана!\n"
+                self._safe_text("🎮 Игра создана!\n"
                 f"Игроков: 1/{Config.MAX_PLAYERS}\n\n"
                 "Отправьте друзьям команду чтобы присоединиться:\n"
                 f"/join_{chat_id}\n\n"
-                "Когда все присоединятся, нажмите 'Начать игру'",
+                "Когда все присоединятся, нажмите 'Начать игру'"),
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("▶️ Начать игру", callback_data=f"begin_{chat_id}")],
                     [InlineKeyboardButton("❌ Отменить игру", callback_data=f"endgame_{chat_id}")]
@@ -130,6 +144,7 @@ class MemesGameBot:
             )
         except Exception as e:
             print(f"❌ Ошибка в start_game: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка создания игры!")
     
     async def join_game(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -141,7 +156,7 @@ class MemesGameBot:
             chat_id = int(context.args[0])
             user = update.effective_user
             
-            print(f"🔄 Игрок {user.first_name} пытается присоединиться к игре {chat_id}")
+            print(f"🔄 Игрок {self._safe_text(user.first_name)} пытается присоединиться к игре {chat_id}")
             
             if chat_id not in self.active_games:
                 await update.message.reply_text("❌ Игра не найдена или уже завершена!")
@@ -158,36 +173,36 @@ class MemesGameBot:
                 return
             
             # Безопасное имя игрока
-            safe_player_name = user.first_name
-            try:
-                safe_player_name.encode('utf-8')
-            except UnicodeEncodeError:
-                safe_player_name = f"Игрок{len(game['players']) + 1}"
+            safe_player_name = self._safe_text(user.first_name, f"Игрок{len(game['players']) + 1}")
             
             # Добавляем игрока
             game['players'].append(user.id)
             game['player_names'][user.id] = safe_player_name
             game['scores'][user.id] = 0
-            self.db.add_user(user.id, user.username, user.first_name, user.last_name)
+            self.db.add_user(
+                user.id, 
+                self._safe_text(user.username),
+                self._safe_text(user.first_name),
+                self._safe_text(user.last_name)
+            )
             
             print(f"✅ Игрок {safe_player_name} добавлен в игру {chat_id}")
             
-            # Безопасное сообщение для чата
-            try:
-                message_text = f"✅ {safe_player_name} присоединился к игре!\nИгроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
-                message_text.encode('utf-8')
-                await context.bot.send_message(chat_id, message_text)
-            except UnicodeEncodeError:
-                await context.bot.send_message(chat_id, f"✅ Новый игрок присоединился! Игроков: {len(game['players'])}/{Config.MAX_PLAYERS}")
+            # Отправляем уведомление в чат
+            await context.bot.send_message(
+                chat_id, 
+                self._safe_text(f"✅ {safe_player_name} присоединился к игре!\nИгроков: {len(game['players'])}/{Config.MAX_PLAYERS}")
+            )
             
             await update.message.reply_text(
-                f"✅ Вы присоединились к игре!\nИгроков: {len(game['players'])}/{Config.MAX_PLAYERS}"
+                self._safe_text(f"✅ Вы присоединились к игре!\nИгроков: {len(game['players'])}/{Config.MAX_PLAYERS}")
             )
             
         except ValueError:
             await update.message.reply_text("❌ Используйте: /join_123456789")
         except Exception as e:
             print(f"❌ Ошибка присоединения: {e}")
+            traceback.print_exc()
             await update.message.reply_text("❌ Ошибка присоединения к игре")
     
     async def begin_game(self, query):
@@ -210,11 +225,11 @@ class MemesGameBot:
             situations = self.file_manager.get_random_situations(Config.SITUATIONS_TO_CHOOSE)
             game['situations'] = situations
             
-            # Создаем клавиатуру с ситуациями (с безопасной обработкой)
+            # Создаем клавиатуру с ситуациями
             keyboard = []
             for i, situation in enumerate(situations):
-                safe_situation = self._safe_text(situation, f"Ситуация {i+1}")
-                button_text = safe_situation[:40] + "..." if len(safe_situation) > 40 else safe_situation
+                safe_sit = self._safe_text(situation, f"Ситуация {i+1}")
+                button_text = safe_sit[:40] + "..." if len(safe_sit) > 40 else safe_sit
                 keyboard.append([InlineKeyboardButton(
                     button_text,
                     callback_data=f"situation_{i}"
@@ -223,15 +238,8 @@ class MemesGameBot:
             # Безопасное получение имени ведущего
             leader_name = self._safe_text(game['player_names'][game['leader']], "Ведущий")
             
-            # Безопасное сообщение
-            message_text = self._safe_text(
-                f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:",
-                f"📝 Ведущий, выберите ситуацию для раунда {game['round_number']}:"
-            )
-            
-            # Отправляем новое сообщение вместо редактирования
             await query.message.reply_text(
-                message_text,
+                self._safe_text(f"📝 {leader_name}, выберите ситуацию для раунда {game['round_number']}:"),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             
@@ -239,6 +247,7 @@ class MemesGameBot:
             
         except Exception as e:
             print(f"❌ Ошибка в begin_game: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка начала игры!")
     
     async def choose_situation(self, query):
@@ -257,29 +266,23 @@ class MemesGameBot:
             game['submitted_memes'] = {}  # user_id -> meme_data
             
             # Безопасное отображение ситуации
-            safe_situation = chosen_situation
-            try:
-                safe_situation.encode('utf-8')
-            except UnicodeEncodeError:
-                safe_situation = "Выбранная ситуация"
+            safe_situation = self._safe_text(chosen_situation, "Выбранная ситуация")
             
-            # Безопасное сообщение
-            try:
-                message_text = f"🎲 РАУНД {game['round_number']} - СИТУАЦИЯ:\n\n{safe_situation}\n\nИгроки выбирают мемы..."
-                message_text.encode('utf-8')
-                await query.edit_message_text(message_text, reply_markup=None)
-            except UnicodeEncodeError:
-                await query.edit_message_text(f"🎲 РАУНД {game['round_number']} - Новая ситуация!\n\nИгроки выбирают мемы...", reply_markup=None)
+            await query.edit_message_text(
+                self._safe_text(f"🎲 РАУНД {game['round_number']} - СИТУАЦИЯ:\n\n{safe_situation}\n\nИгроки выбирают мемы..."), 
+                reply_markup=None
+            )
             
             # Раздаем мемы каждому игроку в ЛС
             for player_id in game['players']:
                 if player_id != game['leader']:  # Ведущий не выбирает мем
                     await self.distribute_memes_to_player(chat_id, player_id, query.message.bot)
             
-            print(f"✅ Выбрана ситуация")
+            print(f"✅ Выбрана ситуация: {safe_situation}")
             
         except Exception as e:
             print(f"❌ Ошибка в choose_situation: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка выбора ситуации!")
     
     async def distribute_memes_to_player(self, chat_id, player_id, bot):
@@ -313,11 +316,12 @@ class MemesGameBot:
             for i, meme in enumerate(memes):
                 try:
                     file_path = meme['path']
-                    if meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
-                        media = InputMediaVideo(media=open(file_path, 'rb'), caption=f"Мем {i+1}" if i == 0 else "")
-                    else:
-                        media = InputMediaPhoto(media=open(file_path, 'rb'), caption=f"Мем {i+1}" if i == 0 else "")
-                    media_group.append(media)
+                    if file_path != 'stub':  # Пропускаем заглушки
+                        if meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
+                            media = InputMediaVideo(media=open(file_path, 'rb'), caption=f"Мем {i+1}" if i == 0 else "")
+                        else:
+                            media = InputMediaPhoto(media=open(file_path, 'rb'), caption=f"Мем {i+1}" if i == 0 else "")
+                        media_group.append(media)
                 except Exception as e:
                     print(f"❌ Ошибка загрузки мема {meme['filename']}: {e}")
                     continue
@@ -325,15 +329,22 @@ class MemesGameBot:
             if media_group:
                 await bot.send_media_group(player_id, media=media_group)
             
+            # Безопасное получение ситуации
+            try:
+                situation = self._safe_text(self.active_games[chat_id]['current_situation'], "Интересная ситуация")
+            except:
+                situation = "Интересная ситуация"
+            
             # Отправляем кнопки для выбора
             await bot.send_message(
                 player_id,
-                f"🎲 Выберите мем для ситуации:\n\n{self.active_games[chat_id]['current_situation']}",
+                self._safe_text(f"🎲 Выберите мем для ситуации:\n\n{situation}"),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             
         except Exception as e:
             print(f"❌ Ошибка отправки мемов игроку {player_id}: {e}")
+            traceback.print_exc()
             await bot.send_message(
                 player_id,
                 "❌ Произошла ошибка при загрузке мемов. Попробуйте позже."
@@ -379,6 +390,7 @@ class MemesGameBot:
                 
         except Exception as e:
             print(f"❌ Ошибка обработки выбора мема: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка выбора мема!")
     
     async def start_voting(self, chat_id, bot):
@@ -404,14 +416,15 @@ class MemesGameBot:
                 option_id = str(uuid.uuid4())[:8]  # Уникальный ID для варианта голосования
                 voting_options[option_id] = user_id
                 
-                caption = f"🎭 Вариант от {player_name}" if i == 0 else ""
+                caption = self._safe_text(f"🎭 Вариант от {player_name}") if i == 0 else ""
                 
                 try:
-                    if meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
-                        media = InputMediaVideo(media=open(meme['path'], 'rb'), caption=caption)
-                    else:
-                        media = InputMediaPhoto(media=open(meme['path'], 'rb'), caption=caption)
-                    media_group.append(media)
+                    if meme['path'] != 'stub':  # Пропускаем заглушки
+                        if meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
+                            media = InputMediaVideo(media=open(meme['path'], 'rb'), caption=caption)
+                        else:
+                            media = InputMediaPhoto(media=open(meme['path'], 'rb'), caption=caption)
+                        media_group.append(media)
                 except Exception as e:
                     print(f"❌ Ошибка загрузки мема для голосования: {e}")
                     continue
@@ -435,7 +448,7 @@ class MemesGameBot:
             
             await bot.send_message(
                 leader_id,
-                f"📊 {game['player_names'][leader_id]}, выберите самый смешной мем для ситуации:\n\n{game['current_situation']}",
+                self._safe_text(f"📊 {game['player_names'][leader_id]}, выберите самый смешной мем для ситуации:\n\n{game['current_situation']}"),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             
@@ -447,6 +460,7 @@ class MemesGameBot:
             
         except Exception as e:
             print(f"❌ Ошибка в start_voting: {e}")
+            traceback.print_exc()
     
     async def handle_vote(self, query):
         try:
@@ -470,7 +484,7 @@ class MemesGameBot:
             
             # Находим победителя
             winner_id = game['voting_options'][option_id]
-            winner_name = game['player_names'][winner_id]
+            winner_name = self._safe_text(game['player_names'][winner_id], "Победитель")
             
             # Обновляем счет
             game['scores'][winner_id] = game['scores'].get(winner_id, 0) + 1
@@ -479,41 +493,52 @@ class MemesGameBot:
             winner_meme = game['submitted_memes'][winner_id]['meme']
             
             try:
-                if winner_meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
+                if winner_meme['path'] != 'stub' and winner_meme['filename'].lower().endswith(('.mp4', '.mov', '.avi')):
                     await query.message.bot.send_video(
                         chat_id,
                         video=open(winner_meme['path'], 'rb'),
-                        caption=f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
+                        caption=self._safe_text(f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
                                f"Ситуация: {game['current_situation']}\n\n"
                                f"💯 Текущие очки:\n" + 
                                "\n".join([f"{name}: {score}" for name, score in sorted(
-                                   [(game['player_names'][pid], score) for pid, score in game['scores'].items()],
+                                   [(self._safe_text(game['player_names'][pid]), score) for pid, score in game['scores'].items()],
                                    key=lambda x: x[1], reverse=True
-                               )])
+                               )]))
                     )
-                else:
+                elif winner_meme['path'] != 'stub':
                     await query.message.bot.send_photo(
                         chat_id,
                         photo=open(winner_meme['path'], 'rb'),
-                        caption=f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
+                        caption=self._safe_text(f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
                                f"Ситуация: {game['current_situation']}\n\n"
                                f"💯 Текущие очки:\n" + 
                                "\n".join([f"{name}: {score}" for name, score in sorted(
-                                   [(game['player_names'][pid], score) for pid, score in game['scores'].items()],
+                                   [(self._safe_text(game['player_names'][pid]), score) for pid, score in game['scores'].items()],
                                    key=lambda x: x[1], reverse=True
-                               )])
+                               )]))
+                    )
+                else:
+                    await query.message.bot.send_message(
+                        chat_id,
+                        self._safe_text(f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
+                        f"Ситуация: {game['current_situation']}\n\n"
+                        f"💯 Текущие очки:\n" + 
+                        "\n".join([f"{name}: {score}" for name, score in sorted(
+                            [(self._safe_text(game['player_names'][pid]), score) for pid, score in game['scores'].items()],
+                            key=lambda x: x[1], reverse=True
+                        )]))
                     )
             except Exception as e:
                 print(f"❌ Ошибка отправки мема победителя: {e}")
                 await query.message.bot.send_message(
                     chat_id,
-                    f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
+                    self._safe_text(f"🏆 ПОБЕДИТЕЛЬ РАУНДА: {winner_name}!\n\n"
                     f"Ситуация: {game['current_situation']}\n\n"
                     f"💯 Текущие очки:\n" + 
                     "\n".join([f"{name}: {score}" for name, score in sorted(
-                        [(game['player_names'][pid], score) for pid, score in game['scores'].items()],
+                        [(self._safe_text(game['player_names'][pid]), score) for pid, score in game['scores'].items()],
                         key=lambda x: x[1], reverse=True
-                    )])
+                    )]))
                 )
             
             # Предлагаем начать следующий раунд
@@ -531,6 +556,7 @@ class MemesGameBot:
             
         except Exception as e:
             print(f"❌ Ошибка обработки голоса: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка голосования!")
     
     async def next_round(self, query):
@@ -540,6 +566,7 @@ class MemesGameBot:
             await query.answer("🔄 Подготовка следующего раунда...")
         except Exception as e:
             print(f"❌ Ошибка в next_round: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка перехода к следующему раунду!")
     
     async def next_round_auto(self, chat_id, bot):
@@ -562,20 +589,23 @@ class MemesGameBot:
             # Создаем клавиатуру с ситуациями
             keyboard = []
             for i, situation in enumerate(situations):
+                safe_sit = self._safe_text(situation, f"Ситуация {i+1}")
+                button_text = safe_sit[:40] + "..." if len(safe_sit) > 40 else safe_sit
                 keyboard.append([InlineKeyboardButton(
-                    situation[:40] + "..." if len(situation) > 40 else situation,
+                    button_text,
                     callback_data=f"situation_{i}"
                 )])
             
-            leader_name = game['player_names'][game['leader']]
+            leader_name = self._safe_text(game['player_names'][game['leader']], "Ведущий")
             
             await bot.send_message(
                 chat_id,
-                f"🔄 РАУНД {game['round_number']}\n📝 {leader_name}, выберите ситуацию:",
+                self._safe_text(f"🔄 РАУНД {game['round_number']}\n📝 {leader_name}, выберите ситуацию:"),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
             print(f"❌ Ошибка в next_round_auto: {e}")
+            traceback.print_exc()
     
     async def end_game(self, query):
         try:
@@ -589,7 +619,7 @@ class MemesGameBot:
             # Определяем победителя
             if game['scores']:
                 winner_id = max(game['scores'], key=game['scores'].get)
-                winner_name = game['player_names'][winner_id]
+                winner_name = self._safe_text(game['player_names'][winner_id], "Победитель")
                 winner_score = game['scores'][winner_id]
                 
                 # Формируем таблицу результатов
@@ -597,12 +627,12 @@ class MemesGameBot:
                 sorted_players = sorted(game['scores'].items(), key=lambda x: x[1], reverse=True)
                 
                 for i, (player_id, score) in enumerate(sorted_players, 1):
-                    player_name = game['player_names'][player_id]
+                    player_name = self._safe_text(game['player_names'][player_id], f"Игрок {i}")
                     results += f"{i}. {player_name}: {score} очков\n"
                 
                 results += f"\n🎉 ПОБЕДИТЕЛЬ: {winner_name} с {winner_score} очками!"
                 
-                await query.edit_message_text(results)
+                await query.edit_message_text(self._safe_text(results))
             else:
                 await query.edit_message_text("🎮 Игра завершена! Никто не набрал очков.")
             
@@ -612,6 +642,7 @@ class MemesGameBot:
                 
         except Exception as e:
             print(f"❌ Ошибка в end_game: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка завершения игры!")
     
     async def show_rules(self, query):
@@ -645,9 +676,9 @@ class MemesGameBot:
             user_stats = self.db.get_user_stats(user_id)
             
             stats_text = f"""
-📊 СТАТИСТИКА {query.from_user.first_name}:
+📊 СТАТИСТИКА {self._safe_text(query.from_user.first_name)}:
 
-🎮 Сиграно игр: {user_stats['games_played']}
+🎮 Сыграно игр: {user_stats['games_played']}
 🏆 Всего очков: {user_stats['total_score']}
 📈 Средний результат: {user_stats['total_score'] / user_stats['games_played'] if user_stats['games_played'] > 0 else 0:.1f}
             """
@@ -655,6 +686,7 @@ class MemesGameBot:
             await query.edit_message_text(stats_text)
         except Exception as e:
             print(f"❌ Ошибка в show_stats: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка загрузки статистики!")
     
     async def show_leaderboard(self, query):
@@ -667,12 +699,13 @@ class MemesGameBot:
             
             leaderboard_text = "🏆 ТОП-10 ИГРОКОВ:\n\n"
             for i, player in enumerate(leaderboard_data, 1):
-                username = player['username'] or player['first_name']
+                username = self._safe_text(player['username'] or player['first_name'], f"Игрок {i}")
                 leaderboard_text += f"{i}. {username} - {player['total_score']} очков ({player['games_played']} игр)\n"
             
             await query.edit_message_text(leaderboard_text)
         except Exception as e:
             print(f"❌ Ошибка в show_leaderboard: {e}")
+            traceback.print_exc()
             await query.answer("❌ Ошибка загрузки лидерборда!")
     
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -681,7 +714,7 @@ class MemesGameBot:
             user_stats = self.db.get_user_stats(user_id)
             
             stats_text = f"""
-📊 СТАТИСТИКА {update.effective_user.first_name}:
+📊 СТАТИСТИКА {self._safe_text(update.effective_user.first_name)}:
 
 🎮 Сыграно игр: {user_stats['games_played']}
 🏆 Всего очков: {user_stats['total_score']}
@@ -691,6 +724,7 @@ class MemesGameBot:
             await update.message.reply_text(stats_text)
         except Exception as e:
             print(f"❌ Ошибка в stats_command: {e}")
+            traceback.print_exc()
             await update.message.reply_text("❌ Ошибка загрузки статистики!")
     
     async def leaderboard_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -703,12 +737,13 @@ class MemesGameBot:
             
             leaderboard_text = "🏆 ТОП-10 ИГРОКОВ:\n\n"
             for i, player in enumerate(leaderboard_data, 1):
-                username = player['username'] or player['first_name']
+                username = self._safe_text(player['username'] or player['first_name'], f"Игрок {i}")
                 leaderboard_text += f"{i}. {username} - {player['total_score']} очков ({player['games_played']} игр)\n"
             
             await update.message.reply_text(leaderboard_text)
         except Exception as e:
             print(f"❌ Ошибка в leaderboard_command: {e}")
+            traceback.print_exc()
             await update.message.reply_text("❌ Ошибка загрузки лидерборда!")
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -741,6 +776,9 @@ def main():
         application = Application.builder().token(Config.BOT_TOKEN).build()
         bot = MemesGameBot()
         
+        # Проверяем файлы
+        bot.file_manager.check_files()
+        
         # Добавляем обработчики команд
         application.add_handler(CommandHandler("start", bot.start))
         application.add_handler(CommandHandler("join", bot.join_game))
@@ -756,6 +794,7 @@ def main():
         
     except Exception as e:
         print(f"❌ Критическая ошибка при запуске бота: {e}")
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
